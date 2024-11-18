@@ -1072,6 +1072,76 @@ H5P.MultiChoice = function (options, contentId, contentData) {
   params.labelId = 'h5p-mcq' + H5P.MultiChoice.counter;
 
   /**
+   * Set current state.
+   * @param {object} state State to set, must match return value structure of getCurrentState.
+   */
+  this.setCurrentState = function (state = {}) {
+    state = this.sanitizeState(state);
+
+    const setCheckedProperty = (answers, userAnswers) => {
+      for (let i = 0; i < answers.length; i++) {
+        if (userAnswers.includes(i)) {
+          answers[i].checked = true;
+        }
+        else {
+          delete answers[i].checked;
+        }
+      }
+    };
+
+    if (!idMap) {
+      params.userAnswers = state.answers;
+      setCheckedProperty(params.answers, state.answers);
+    }
+    else {
+      // The answers have been shuffled and the id must be mapped back to the position.
+      params.userAnswers = state.answers.map(answer => idMap.indexOf(answer));
+      setCheckedProperty(params.answers, params.userAnswers);
+    }
+
+    [...$myDom.get(0).querySelectorAll('.h5p-answer')].forEach((answer, index) => {
+      answer.classList.toggle('h5p-selected', params.answers[index].checked);
+      answer.setAttribute('aria-checked', String(params.answers[index].checked ?? false));
+    });
+
+    calcScore();
+
+    this.answered = false; // GetAnswerGiven uses current state of this.answered
+    this.answered = this.getAnswerGiven();
+
+    this.hideSolutions();
+    this.showButton('check-answer');
+    this.hideButton('try-again');
+    this.hideButton('show-solution');
+    enableInput();
+    $myDom?.get(0).querySelector('.h5p-feedback-available')?.remove();
+  }
+
+  /**
+   * Sanitize a state object.
+   * @param {object} state State object.
+   * @returns {object} Sanitized state object.
+   */
+  this.sanitizeState = function (state = {}) {
+    let newState = {};
+    if (Array.isArray(state.answers)) {
+      newState.answers = state.answers.reduce((acc, answer, index) => {
+        if (params.behaviour.singleAnswer && acc.length > 0) {
+          return acc; // Only one answer allowed
+        }
+
+        if (typeof answer === 'number' && answer >= 0 && answer < params.answers.length) {
+          acc.push(answer);
+        }
+
+        return acc;
+      }, []);
+    }
+
+    return newState;
+  }
+
+  /**
    * Pack the current state of the interactivity into a object that can be
    * serialized.
    *
